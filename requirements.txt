@@ -1,0 +1,7 @@
+pytest
+numpy
+matplotlib
+scipy
+mkl
+sklearn
+math
