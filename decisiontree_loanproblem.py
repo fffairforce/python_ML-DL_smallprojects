@@ -1,5 +1,7 @@
 from math import log
 import operator
+from matplotlib.font_manager import FontProperties
+import matplotlib.pyplot as plt
 
 
 def createDataSet():
@@ -54,11 +56,11 @@ def calcShannonEnt(dataSet):
         currentlabel = featVec[-1]
         if currentlabel not in labelCounts.keys():
             labelCounts[currentlabel] = 0
-            labelCounts[currentlabel] += 1
-            shannonEnt = 0.0
+        labelCounts[currentlabel] += 1
+    shannonEnt = 0.0
     for key in labelCounts:
-                prob = float(labelCounts[key])/numEntries
-                shannonEnt -= prob * log(prob, 2)
+        prob = float(labelCounts[key])/numEntries
+        shannonEnt -= prob * log(prob, 2)
     return shannonEnt
 
 
@@ -77,7 +79,7 @@ def chooseBestFeatureToSplit(dataSet):
             prob = len(subDataSet) / float(len(dataSet))  # 计算子集的概率
             newEntropy += prob * calcShannonEnt(subDataSet)  # 根据公式计算经验条件熵
         infoGain = baseEntropy - newEntropy  # 信息增益
-        print("第%d个特征的增益为%.3f" % (i, infoGain))  # 打印每个特征的信息增益
+        # print("第%d个特征的增益为%.3f" % (i, infoGain))  # 打印每个特征的信息增益
         if (infoGain > bestInfoGain):  # 计算信息增益
             bestInfoGain = infoGain  # 更新信息增益，找到最大的信息增益
             bestFeature = i  # 记录信息增益最大的特征的索引值
@@ -118,9 +120,95 @@ def createtree(dataset, labels, featlabels):
     return mytree
 
 
+def plotMidText(cntrPt, parentPt, txtString):
+    xMid = (parentPt[0] - cntrPt[0])/2.0 + cntrPt[0]
+    yMid = (parentPt[1] - cntrPt[1])/2.0 + cntrPt[1]
+    createPlot.ax1.text(xMid, yMid, txtString, va='center', ha='center', rotation=30)
+
+
+def getNumLeafs(myTree):
+    numLeafs = 0                                                #初始化叶子
+    firstStr = next(iter(myTree))                                #python3中myTree.keys()返回的是dict_keys,不在是list,所以不能使用myTree.keys()[0]的方法获取结点属性，可以使用list(myTree.keys())[0]
+    secondDict = myTree[firstStr]                                #获取下一组字典
+    for key in secondDict.keys():
+        if type(secondDict[key]).__name__ == 'dict':                #测试该结点是否为字典，如果不是字典，代表此结点为叶子结点
+            numLeafs += getNumLeafs(secondDict[key])
+        else:
+            numLeafs += 1
+    return numLeafs
+
+
+def getTreeDepth(myTree):
+    maxDepth = 0                                                #初始化决策树深度
+    firstStr = next(iter(myTree))                                #python3中myTree.keys()返回的是dict_keys,不在是list,所以不能使用myTree.keys()[0]的方法获取结点属性，可以使用list(myTree.keys())[0]
+    secondDict = myTree[firstStr]                                #获取下一个字典
+    for key in secondDict.keys():
+        if type(secondDict[key]).__name__ == 'dict':                #测试该结点是否为字典，如果不是字典，代表此结点为叶子结点
+            thisDepth = 1 + getTreeDepth(secondDict[key])
+        else:
+            thisDepth = 1
+        if thisDepth > maxDepth:
+            maxDepth = thisDepth            #更新层数
+    return maxDepth
+
+
+def plotNode(nodeTxt, centerPt, parentPt, nodeType):
+    arrow_args = dict(arrowstyle="<-")  # 定义箭头格式
+    font = FontProperties(fname=r"c:\windows\fonts\simsun.ttc",
+                          size=14)  # 设置中文字体
+    createPlot.ax1.annotate(nodeTxt, xy=parentPt, xycoords='axes fraction',
+                            # 绘制结点
+                            xytext=centerPt, textcoords='axes fraction',
+                            va="center", ha="center", bbox=nodeType,
+                            arrowprops=arrow_args, FontProperties=font)
+
+
+def plotTree(mytree, parentPt, nodeTxt):
+    decisionNode = dict(boxstyle='sawtooth', fc='0.8')
+    leafNode = dict(boxstyle='round4', fc='0.8')
+    numLeafs = getNumLeafs(mytree)
+    depth = getTreeDepth(mytree)
+    firstStr = next(iter(mytree))
+    cntrPt = (plotTree.xOff + (1.0 + float(numLeafs))/2.0/plotTree.totalW, plotTree.yOff)
+    plotMidText(cntrPt, parentPt, nodeTxt)
+    plotNode(firstStr, cntrPt, parentPt, decisionNode)
+
+
+def createPlot(inTree):
+    fig = plt.figure(1, facecolor='white')                            # 创建fig
+    fig.clf()                                                         # 清空fig
+    axprops = dict(xticks=[], yticks=[])
+    createPlot.ax1 = plt.subplot(111, frameon=False, **axprops)    # 去掉x、y轴
+    plotTree.totalW = float(getNumLeafs(inTree))         # 获取决策树叶结点数目
+    plotTree.totalD = float(getTreeDepth(inTree))              # 获取决策树层数
+    plotTree.xOff = -0.5/plotTree.totalW; plotTree.yOff = 1.0           # x偏移
+    plotTree(inTree, (0.5, 1.0), '')                                # 绘制决策树
+    plt.show()
+
+
+def classify(inputTree, featLabels, testVec):
+    firstStr = next(iter(inputTree))
+    secondDict = inputTree[firstStr]
+    featIndex = featLabels.index(firstStr)
+    for key in secondDict.keys():
+        if testVec[featIndex] == key:
+            if type(secondDict[key]).__name__ == 'dict':
+                classLabel = classify(secondDict[key], featLabels, testVec)
+            else:
+                classLabel = secondDict[key]
+    return classLabel
+
+
 if __name__ == '__main__':
     dataSet, labels = createDataSet()
-    featLabels=[]
+    featLabels = []
     mytree = createtree(dataSet, labels, featLabels)
-    #print("最优特征索引值:" + str(chooseBestFeatureToSplit(dataSet)))
-    print(mytree)
+    # print("最优特征索引值:" + str(chooseBestFeatureToSplit(dataSet)))
+    # print(mytree)
+    # createPlot(mytree)
+    testVec = [0, 1]
+    result = classify(mytree, featLabels, testVec)
+    if result == 'yes':
+        print('loan')
+    if result == 'no':
+        print('dont loan')
